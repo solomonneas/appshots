@@ -2,7 +2,7 @@
 
 `appshots` is an agent-neutral app screenshot capture CLI. It captures the active app/window, writes a PNG plus metadata, and prints stable JSON so any agent can call it as a subprocess.
 
-Linux is the first implemented backend. Windows support is planned in the same repo so agents can depend on one command and one output contract across desktops.
+Linux and Windows are supported so agents can depend on one command and one output contract across desktops.
 
 OpenAI's Appshots behavior is the compatibility target:
 
@@ -33,6 +33,12 @@ Or:
 bash scripts/install.sh
 ```
 
+On Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/install.ps1
+```
+
 ## Release Packaging
 
 Build a local release archive:
@@ -41,7 +47,13 @@ Build a local release archive:
 bash scripts/package-release.sh
 ```
 
-Archives are written under `dist/`. Tagged GitHub releases are packaged by `.github/workflows/release.yml`.
+On Windows:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File scripts/package-release.ps1
+```
+
+Archives are written under `dist/`. Tagged GitHub releases are packaged by `.github/workflows/release.yml` for Linux and Windows.
 
 ## Commands
 
@@ -69,7 +81,7 @@ Each successful capture directory contains:
 - `metadata.json`, the same JSON object printed to stdout.
 - `text.txt`, optional best-effort accessible text from the focused app.
 
-Capture exits with `0` only when a raw image was written. Text extraction and presentation-image failures are warnings because Linux accessibility support and desktop compositing vary by toolkit, app, and desktop environment. `--target screen` exists as a Linux fallback/debug mode, but `--target active` is the Appshots-compatible default.
+Capture exits with `0` only when a raw image was written. Text extraction and presentation-image failures are warnings because accessibility support and desktop compositing vary by toolkit, app, desktop environment, and OS. `--target screen` exists as a fallback/debug mode, but `--target active` is the Appshots-compatible default.
 
 Use `--presentation raw`, `--presentation card`, or `--presentation both` to control output image generation. Use `--style-seed <number>` to reproduce a randomized card style exactly.
 
@@ -113,6 +125,13 @@ You can discover the active values from a desktop process:
 tr '\0' '\n' </proc/$(pgrep -u "$(id -u)" -n gnome-shell)/environ | grep -E '^(DISPLAY|XAUTHORITY|DBUS_SESSION_BUS_ADDRESS|XDG_SESSION_TYPE)='
 ```
 
+## Windows Backend Notes
+
+- Active/window capture uses Win32 foreground-window and top-level-window metadata, then captures the visible window bounds through .NET `CopyFromScreen`.
+- Screen capture uses the Windows virtual screen.
+- Text extraction is best-effort through UI Automation.
+- Capture must run in a logged-in interactive desktop session. Plain OpenSSH sessions can build and run `doctor`, but Windows blocks screen capture from the non-interactive SSH service session.
+
 ## Roadmap
 
-See [ROADMAP.md](ROADMAP.md). Windows support is planned in this repo as a new backend that reuses the same CLI, JSON contract, card renderer, and Codex payload behavior.
+See [ROADMAP.md](ROADMAP.md).

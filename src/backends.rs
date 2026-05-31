@@ -1,15 +1,22 @@
 use std::path::Path;
 use std::path::PathBuf;
 
+#[cfg(target_os = "windows")]
+use crate::capture::windows;
 use crate::contract::BackendInfo;
+#[cfg(not(target_os = "windows"))]
 use crate::contract::CapabilityStatus;
 use crate::contract::CaptureTarget;
 use crate::contract::DoctorReport;
+#[cfg(not(target_os = "windows"))]
 use crate::contract::Geometry;
+#[cfg(not(target_os = "windows"))]
 use crate::contract::HelperStatus;
+#[cfg(not(target_os = "windows"))]
 use crate::contract::SessionInfo;
 use crate::contract::WindowInfo;
 use crate::contract::WindowList;
+#[cfg(not(target_os = "windows"))]
 use crate::util;
 use crate::util::AppError;
 
@@ -37,6 +44,18 @@ pub struct FrameExtents {
 }
 
 pub fn doctor_report() -> DoctorReport {
+    #[cfg(target_os = "windows")]
+    {
+        return windows::doctor_report(VERSION);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        linux_doctor_report()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn linux_doctor_report() -> DoctorReport {
     let session = session_info();
     let helper_names = [
         "xdotool",
@@ -99,6 +118,18 @@ pub fn doctor_report() -> DoctorReport {
 }
 
 pub fn list_windows() -> WindowList {
+    #[cfg(target_os = "windows")]
+    {
+        return windows::list_windows();
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        linux_list_windows()
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn linux_list_windows() -> WindowList {
     let mut warnings = Vec::new();
     let mut errors = Vec::new();
     if util::env_var("DISPLAY").is_none() {
@@ -137,6 +168,18 @@ pub fn list_windows() -> WindowList {
 }
 
 pub fn capture(request: CaptureRequest<'_>) -> Result<CaptureSuccess, AppError> {
+    #[cfg(target_os = "windows")]
+    {
+        return windows::capture(request);
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        linux_capture(request)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn linux_capture(request: CaptureRequest<'_>) -> Result<CaptureSuccess, AppError> {
     match request.target {
         CaptureTarget::Screen => capture_screen(request.output_path),
         CaptureTarget::Active => capture_active(request.output_path),
@@ -144,6 +187,7 @@ pub fn capture(request: CaptureRequest<'_>) -> Result<CaptureSuccess, AppError> 
     }
 }
 
+#[cfg(not(target_os = "windows"))]
 fn capture_active(output_path: &Path) -> Result<CaptureSuccess, AppError> {
     if util::env_var("DISPLAY").is_some() {
         let active_window = if util::has_command("xdotool") {
@@ -200,6 +244,7 @@ fn capture_active(output_path: &Path) -> Result<CaptureSuccess, AppError> {
     ))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn capture_screen(output_path: &Path) -> Result<CaptureSuccess, AppError> {
     let output = output_path.display().to_string();
     if util::env_var("WAYLAND_DISPLAY").is_some() && util::has_command("grim") {
@@ -251,6 +296,7 @@ fn capture_screen(output_path: &Path) -> Result<CaptureSuccess, AppError> {
     ))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn capture_window(request: CaptureRequest<'_>) -> Result<CaptureSuccess, AppError> {
     let window = if let Some(id) = request.window_id {
         WindowInfo {
@@ -270,6 +316,7 @@ fn capture_window(request: CaptureRequest<'_>) -> Result<CaptureSuccess, AppErro
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn capture_x11_window(window_id: Option<&str>, output_path: &Path) -> Result<(), AppError> {
     let Some(window_id) = window_id else {
         return Err(AppError::Message("window id is required".to_string()));
@@ -284,6 +331,19 @@ fn capture_x11_window(window_id: Option<&str>, output_path: &Path) -> Result<(),
 }
 
 pub fn frame_extents_for_window(window: &WindowInfo) -> Option<FrameExtents> {
+    #[cfg(target_os = "windows")]
+    {
+        let _ = window;
+        return None;
+    }
+    #[cfg(not(target_os = "windows"))]
+    {
+        linux_frame_extents_for_window(window)
+    }
+}
+
+#[cfg(not(target_os = "windows"))]
+fn linux_frame_extents_for_window(window: &WindowInfo) -> Option<FrameExtents> {
     let id = window.id.as_deref()?;
     if !util::has_command("xprop") {
         return None;
@@ -296,6 +356,7 @@ pub fn frame_extents_for_window(window: &WindowInfo) -> Option<FrameExtents> {
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn active_x11_window() -> Result<WindowInfo, AppError> {
     let id = util::run_output("xdotool", &["getactivewindow"])?;
     let title = util::run_output("xdotool", &["getwindowname", &id]).ok();
@@ -315,6 +376,7 @@ fn active_x11_window() -> Result<WindowInfo, AppError> {
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn find_window(title: Option<&str>, app: Option<&str>) -> Result<WindowInfo, AppError> {
     let windows = parse_wmctrl_windows()?;
     windows
@@ -337,6 +399,7 @@ fn find_window(title: Option<&str>, app: Option<&str>) -> Result<WindowInfo, App
         .ok_or_else(|| AppError::Message("no matching window found".to_string()))
 }
 
+#[cfg(not(target_os = "windows"))]
 fn parse_wmctrl_windows() -> Result<Vec<WindowInfo>, AppError> {
     let output = util::run_output("wmctrl", &["-lp"])?;
     let mut windows = Vec::new();
@@ -359,6 +422,7 @@ fn parse_wmctrl_windows() -> Result<Vec<WindowInfo>, AppError> {
     Ok(windows)
 }
 
+#[cfg(not(target_os = "windows"))]
 fn parse_xdotool_geometry(output: &str) -> Option<Geometry> {
     let mut x = None;
     let mut y = None;
@@ -387,12 +451,14 @@ fn parse_xdotool_geometry(output: &str) -> Option<Geometry> {
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn capture_helper_available() -> bool {
     util::has_command("import")
         || util::has_command("gnome-screenshot")
         || util::has_command("scrot")
 }
 
+#[cfg(not(target_os = "windows"))]
 fn parse_frame_extents(output: &str) -> Option<FrameExtents> {
     let (_name, values) = output.split_once('=')?;
     let values = values
@@ -411,6 +477,7 @@ fn parse_frame_extents(output: &str) -> Option<FrameExtents> {
     })
 }
 
+#[cfg(not(target_os = "windows"))]
 fn session_info() -> SessionInfo {
     SessionInfo {
         xdg_session_type: util::env_var("XDG_SESSION_TYPE"),
@@ -427,6 +494,7 @@ pub fn default_output_dir() -> PathBuf {
 }
 
 #[cfg(test)]
+#[cfg(not(target_os = "windows"))]
 mod tests {
     use super::FrameExtents;
     use super::parse_frame_extents;

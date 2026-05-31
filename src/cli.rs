@@ -383,14 +383,24 @@ fn read_metadata(capture_dir: &Path) -> Result<AppshotResult, Box<dyn std::error
 
 fn open_path(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     let path = path.display().to_string();
-    if util::has_command("xdg-open") {
-        util::desktop_command("xdg-open").arg(&path).spawn()?;
-    } else if util::has_command("gio") {
-        util::desktop_command("gio").args(["open", &path]).spawn()?;
-    } else {
-        return Err("no opener found: install xdg-open or gio".into());
+    #[cfg(target_os = "windows")]
+    {
+        std::process::Command::new("cmd")
+            .args(["/C", "start", "", &path])
+            .spawn()?;
+        return Ok(());
     }
-    Ok(())
+    #[cfg(not(target_os = "windows"))]
+    {
+        if util::has_command("xdg-open") {
+            util::desktop_command("xdg-open").arg(&path).spawn()?;
+        } else if util::has_command("gio") {
+            util::desktop_command("gio").args(["open", &path]).spawn()?;
+        } else {
+            return Err("no opener found: install xdg-open or gio".into());
+        }
+        Ok(())
+    }
 }
 
 fn image_info(path: &std::path::Path, detail: ImageDetail) -> Result<ImageInfo, util::AppError> {

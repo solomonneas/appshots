@@ -2,6 +2,7 @@ use crate::contract::TextInfo;
 use crate::util;
 use std::path::Path;
 
+#[cfg(not(target_os = "windows"))]
 const ATSPI_SCRIPT: &str = r#"
 import warnings
 warnings.filterwarnings("ignore", category=DeprecationWarning)
@@ -60,6 +61,70 @@ if results:
 raise SystemExit(3)
 "#;
 
+#[cfg(target_os = "windows")]
+const UI_AUTOMATION_SCRIPT: &str = r#"
+$ErrorActionPreference = 'Stop'
+Add-Type -AssemblyName UIAutomationClient
+Add-Type -AssemblyName UIAutomationTypes
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+
+public static class TextNativeMethods {
+    [DllImport("user32.dll")]
+    public static extern IntPtr GetForegroundWindow();
+}
+'@
+
+$handle = [TextNativeMethods]::GetForegroundWindow()
+if ($handle -eq [IntPtr]::Zero) { exit 3 }
+
+$root = [System.Windows.Automation.AutomationElement]::FromHandle($handle)
+if (-not $root) { exit 3 }
+
+$seen = New-Object 'System.Collections.Generic.HashSet[string]'
+$items = New-Object 'System.Collections.Generic.List[string]'
+
+function Add-Text([string]$Text) {
+    if ([string]::IsNullOrWhiteSpace($Text)) { return }
+    $clean = (($Text -split '\s+') -join ' ').Trim()
+    if ($clean.Length -eq 0) { return }
+    if ($seen.Add($clean)) { [void]$items.Add($clean) }
+}
+
+function Collect-Element($Element) {
+    try { Add-Text $Element.Current.Name } catch {}
+
+    try {
+        $pattern = $null
+        if ($Element.TryGetCurrentPattern([System.Windows.Automation.ValuePattern]::Pattern, [ref]$pattern)) {
+            Add-Text $pattern.Current.Value
+        }
+    } catch {}
+
+    try {
+        $pattern = $null
+        if ($Element.TryGetCurrentPattern([System.Windows.Automation.TextPattern]::Pattern, [ref]$pattern)) {
+            Add-Text $pattern.DocumentRange.GetText(4000)
+        }
+    } catch {}
+}
+
+Collect-Element $root
+$elements = $root.FindAll(
+    [System.Windows.Automation.TreeScope]::Descendants,
+    [System.Windows.Automation.Condition]::TrueCondition
+)
+foreach ($element in $elements) {
+    Collect-Element $element
+    if ($items.Count -ge 200) { break }
+}
+
+if ($items.Count -eq 0) { exit 3 }
+$items -join "`n"
+"#;
+
+#[cfg(not(target_os = "windows"))]
 pub fn extract(output_dir: &Path, warnings: &mut Vec<String>) -> TextInfo {
     if !util::has_command("python3") {
         warnings.push("Text extraction skipped because python3 is not on PATH.".to_string());
@@ -111,5 +176,39 @@ pub fn extract(output_dir: &Path, warnings: &mut Vec<String>) -> TextInfo {
         path: Some(util::canonical_or_original(&path)),
         bytes: text.len() as u64,
         source: Some("at-spi".to_string()),
+    }
+}
+
+#[cfg(target_os = "windows")]
+pub fn extract(output_dir: &Path, warnings: &mut Vec<String>) -> TextInfo {
+    if !util::has_command("powershell") {
+        warnings.push("Text extraction skipped because PowerShell is not on PATH.".to_string());
+        return TextInfo::default();
+    }
+
+    let text = match crate::capture::windows::run_powershell(UI_AUTOMATION_SCRIPT, &[]) {
+        Ok(text) => text.trim().to_string(),
+        Err(err) => {
+            warnings.push(format!("UI Automation text extraction failed: {err}"));
+            return TextInfo::default();
+        }
+    };
+
+    if text.is_empty() {
+        warnings.push("UI Automation returned no focused text.".to_string());
+        return TextInfo::default();
+    }
+
+    let path = output_dir.join("text.txt");
+    if let Err(err) = util::write(&path, text.as_bytes()) {
+        warnings.push(format!("Captured text could not be written: {err}"));
+        return TextInfo::default();
+    }
+
+    TextInfo {
+        available: true,
+        path: Some(util::canonical_or_original(&path)),
+        bytes: text.len() as u64,
+        source: Some("ui-automation".to_string()),
     }
 }
