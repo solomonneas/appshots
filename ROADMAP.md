@@ -22,6 +22,19 @@ App Shots is a cross-platform, agent-neutral CLI with Linux as the first backend
 - Add Windows integration tests for interactive-session capture.
 - Add signed release binaries once the publishing path is stable.
 
+## Distro And Media Test Matrix
+
+- Add small container-based package smoke tests for major Linux distro families:
+  Debian/Ubuntu, Fedora/RHEL, Arch, openSUSE, and Alpine where practical.
+- Keep container tests focused on build, packaging, CLI contract, `schema`, `doctor`,
+  and helper-detection behavior. Real screenshot capture still needs a graphical
+  desktop session, so it belongs in VM or desktop-session tests rather than plain
+  headless containers.
+- Add optional VM/desktop smoke targets for GNOME X11, GNOME Wayland, KDE, and
+  wlroots compositors.
+- Explore shared capture artifacts for downstream video/demo workflows, including
+  consistent image sizing, card style seeds, and future video format handoff points.
+
 ## Release Packaging
 
 - Linux release archives are packaged by `scripts/package-release.sh`.
