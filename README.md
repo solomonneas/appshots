@@ -15,11 +15,11 @@
 </p>
 
 <p align="center">
-  <img src="docs/appshot-settings-random-card-2026-05-31.png" alt="Cloche shot of Linux Settings" width="720">
+  <img src="docs/cloche-settings-card-2026-06-07.png" alt="Cloche shot of Linux Settings" width="720">
 </p>
 
 <p align="center">
-  <img src="docs/appshot-calculator-card-2026-05-31.png" alt="Cloche shot of Linux Calculator" width="420">
+  <img src="docs/cloche-calculator-card-2026-06-07.png" alt="Cloche shot of Linux Calculator" width="420">
 </p>
 
 Cloche is an open-source desktop capture tool for people and agents. It captures the active app or window, writes polished artifacts plus metadata, and prints stable JSON so scripts, local tools, and AI agents can all use the same command.
