@@ -62,6 +62,14 @@ Reference: <https://developers.openai.com/codex/appshots>
 
 ## Install
 
+Install the latest release from crates.io:
+
+```bash
+cargo install cloche
+```
+
+Build and install from a local checkout:
+
 ```bash
 cargo install --path . --bins
 ```
