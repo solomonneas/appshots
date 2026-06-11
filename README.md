@@ -34,6 +34,7 @@ This repo started as `appshots`. The `appshots` binary remains as a compatibilit
 
 - Captures the active window, a selected window, or the full screen.
 - Writes `shot.png`, `metadata.json`, optional `text.txt`, and a polished `shot-card.png`.
+- Styles any existing image into the same presentation card with `cloche polish`.
 - Emits stable JSON on stdout for agents and automation.
 - Extracts best-effort visible or accessible app text when the OS exposes it.
 - Provides `gallery`, `latest`, and `preview` helpers for capture history.
@@ -94,6 +95,12 @@ Capture the active app or window as a Shot:
 cloche capture --target active --out-dir /tmp/cloche-shot-$(date +%s) --format json
 ```
 
+Style an existing screenshot into a presentation card without recapturing:
+
+```bash
+cloche polish /tmp/diff.png --palette violet-haze --format json
+```
+
 Preview the latest capture:
 
 ```bash
@@ -121,6 +128,8 @@ cloche capture --target active --presentation both --out-dir /tmp/cloche-shot --
 cloche capture --target active --style-seed 12345 --out-dir /tmp/cloche-shot --format json
 cloche capture --target screen --out-dir /tmp/cloche-shot --format json
 cloche capture --target window --title Firefox --out-dir /tmp/cloche-shot --format json
+cloche polish /tmp/diff.png --format json
+cloche polish /tmp/diff.png --out /tmp/diff-card.png --palette ember-glow --style-seed 12345
 cloche gallery --limit 10
 cloche gallery --root /tmp --html /tmp/cloche.html --title "My Shots" --open
 cloche latest
@@ -166,7 +175,7 @@ Other agents should treat Cloche as a normal subprocess tool. The core command h
 
 ## MCP Server
 
-`cloche mcp` runs a minimal stdio MCP server for clients that prefer the Model Context Protocol over direct subprocess calls. It speaks newline-delimited JSON-RPC 2.0 on stdin/stdout and exposes `capture`, `list_windows`, `doctor`, `latest`, and `gallery` as tools. Each tool call shells out to the same binary, so the JSON contract is identical to the CLI.
+`cloche mcp` runs a minimal stdio MCP server for clients that prefer the Model Context Protocol over direct subprocess calls. It speaks newline-delimited JSON-RPC 2.0 on stdin/stdout and exposes `capture`, `polish`, `list_windows`, `doctor`, `latest`, and `gallery` as tools. Each tool call shells out to the same binary, so the JSON contract is identical to the CLI.
 
 Register it like any stdio MCP server:
 

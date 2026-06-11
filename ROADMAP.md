@@ -17,6 +17,7 @@ GIF support is planned as an export target after Reels, not as the primary recor
 - Windows active-window and selected-window capture through Win32 metadata plus `PrintWindow`, with .NET screen capture for virtual-screen captures and fallback cases.
 - Windows best-effort text extraction through UI Automation.
 - Raw `shot.png`, polished randomized `shot-card.png`, `metadata.json`, and optional `text.txt`.
+- `polish` command and MCP tool that style any existing image into the same presentation card, so agents and scripts can reframe screenshots they did not capture with Cloche.
 - Stable JSON output for agent subprocess use.
 - Codex app-server payload generation through existing `localImage` input.
 - Capture history helpers: `gallery`, `latest`, and `preview`/`open`.

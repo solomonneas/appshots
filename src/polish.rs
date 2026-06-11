@@ -77,8 +77,30 @@ pub struct PresentationStyle {
 }
 
 pub fn random_style() -> PresentationStyle {
-    let seed = rand::rng().random();
-    style_from_seed(seed)
+    style_from_seed(random_seed())
+}
+
+pub fn random_seed() -> u64 {
+    rand::rng().random()
+}
+
+/// All palette names accepted by `style_with_palette`, in table order.
+pub fn palette_names() -> Vec<&'static str> {
+    PALETTES.iter().map(|(name, _, _, _)| *name).collect()
+}
+
+/// Seeded style with the gradient palette pinned to `palette_name` instead of
+/// the seed's random pick. Returns `None` for an unknown palette name.
+pub fn style_with_palette(seed: u64, palette_name: &str) -> Option<PresentationStyle> {
+    let (name, stops, glow_a, glow_b) = PALETTES
+        .iter()
+        .find(|(name, _, _, _)| *name == palette_name)?;
+    let mut style = style_from_seed(seed);
+    style.palette_name = (*name).to_string();
+    style.stops = *stops;
+    style.glow_a = *glow_a;
+    style.glow_b = *glow_b;
+    Some(style)
 }
 
 pub fn style_from_seed(seed: u64) -> PresentationStyle {
@@ -502,6 +524,45 @@ mod tests {
                     .any(|(name, _, _, _)| *name == style.palette_name)
             );
         }
+    }
+
+    #[test]
+    fn palette_names_match_palette_table() {
+        let names = palette_names();
+        assert_eq!(names.len(), PALETTES.len());
+        for (name, _, _, _) in PALETTES {
+            assert!(names.contains(&name));
+        }
+    }
+
+    #[test]
+    fn style_with_palette_pins_the_named_palette() {
+        let (_, stops, glow_a, glow_b) = PALETTES[1];
+        let style = style_with_palette(9, "ember-glow").expect("known palette");
+        assert_eq!(style.palette_name, "ember-glow");
+        assert_eq!(style.stops, stops);
+        assert_eq!(style.glow_a, glow_a);
+        assert_eq!(style.glow_b, glow_b);
+        // Everything except the palette still derives from the seed.
+        let base = style_from_seed(9);
+        assert_eq!(style.padding, base.padding);
+        assert_eq!(style.gradient_angle, base.gradient_angle);
+    }
+
+    #[test]
+    fn style_with_palette_is_deterministic() {
+        let first = style_with_palette(42, "midnight-sky").expect("known palette");
+        let second = style_with_palette(42, "midnight-sky").expect("known palette");
+        let input = test_input(200, 160);
+        assert_eq!(
+            compose_card(&input, &first).as_raw(),
+            compose_card(&input, &second).as_raw()
+        );
+    }
+
+    #[test]
+    fn style_with_unknown_palette_returns_none() {
+        assert!(style_with_palette(1, "hotdog-stand").is_none());
     }
 
     #[test]

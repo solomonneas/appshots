@@ -41,3 +41,23 @@ Running log of decisions and tradeoffs not captured in commit messages or the sp
   runner) and `run_tool_via_subprocess()` (the side-effecting part). `tool_command_args`
   is also pure and unit-tested.
 - Protocol version reported: `2025-06-18`.
+
+## Polish command (2026-06-11)
+
+- New `cloche polish <INPUT>` styles an existing image into the presentation card
+  (rounded window, layered shadows, gradient backdrop) without a live capture.
+  Motivation: agent sessions kept being asked to "clean up this screenshot with
+  Cloche", which previously had no real implementation, so agents improvised
+  ImageMagick recreations with flat white or transparent canvases.
+- Output is a single PNG (default `<input>-card.png` next to the input). `--out`
+  must end in `.png`; the card always carries alpha for its rounded canvas
+  corners, so silently re-encoding to JPEG would corrupt the look.
+- `--palette <name>` pins one of the named palettes while every other style
+  parameter still derives from the seed (`style_with_palette` in `polish.rs`).
+  Palette names come from the `PALETTES` table via `palette_names()` so clap
+  help, MCP schema enum, and validation share one source of truth.
+- No `metadata.json` and no frame-extent cropping: polish is a single-file
+  transform, not a capture. `gallery`/`latest` only scan capture dirs and that
+  stays true.
+- Result contract is a new `PolishResult` (camelCase wire keys) rather than
+  reusing `AppshotResult`, which is capture-shaped (target, backend, window).

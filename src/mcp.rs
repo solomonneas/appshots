@@ -102,7 +102,7 @@ fn error_response(id: &Value, code: i64, message: &str) -> Value {
 fn is_known_tool(name: &str) -> bool {
     matches!(
         name,
-        "capture" | "list_windows" | "doctor" | "latest" | "gallery"
+        "capture" | "polish" | "list_windows" | "doctor" | "latest" | "gallery"
     )
 }
 
@@ -123,6 +123,20 @@ fn tool_definitions() -> Value {
                     "detail": { "type": "string", "enum": ["auto", "low", "high", "original"], "default": "high" },
                     "styleSeed": { "type": "integer" }
                 }
+            }
+        },
+        {
+            "name": "polish",
+            "description": "Style an existing image into a Cloche presentation card (rounded window, shadows, gradient backdrop) and return the JSON result.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "input": { "type": "string", "description": "Path to the image to style (PNG, JPEG, or WebP)." },
+                    "out": { "type": "string", "description": "Output card path; defaults to <input>-card.png next to the input." },
+                    "palette": { "type": "string", "enum": crate::polish::palette_names(), "description": "Gradient palette; random when omitted." },
+                    "styleSeed": { "type": "integer", "description": "Seed for deterministic styling." }
+                },
+                "required": ["input"]
             }
         },
         {
@@ -187,6 +201,26 @@ pub fn tool_command_args(name: &str, arguments: &Value) -> Result<Vec<String>, S
             }
             if let Some(value) = string_arg(arguments, "detail") {
                 args.push("--detail".to_string());
+                args.push(value);
+            }
+            if let Some(value) = arguments.get("styleSeed").and_then(Value::as_u64) {
+                args.push("--style-seed".to_string());
+                args.push(value.to_string());
+            }
+        }
+        "polish" => {
+            let input =
+                string_arg(arguments, "input").ok_or("polish requires an input image path")?;
+            args.push("polish".to_string());
+            args.push("--format".to_string());
+            args.push("json".to_string());
+            args.push(input);
+            if let Some(value) = string_arg(arguments, "out") {
+                args.push("--out".to_string());
+                args.push(value);
+            }
+            if let Some(value) = string_arg(arguments, "palette") {
+                args.push("--palette".to_string());
                 args.push(value);
             }
             if let Some(value) = arguments.get("styleSeed").and_then(Value::as_u64) {
@@ -354,5 +388,38 @@ mod tests {
     fn gallery_args_pass_limit() {
         let args = tool_command_args("gallery", &json!({ "limit": 5 })).expect("args");
         assert!(args.windows(2).any(|w| w == ["--limit", "5"]));
+    }
+
+    #[test]
+    fn tools_list_includes_polish() {
+        let request = json!({ "jsonrpc": "2.0", "id": 6, "method": "tools/list" });
+        let response = dispatch(&request, &mut never_called).expect("response");
+        let tools = response["result"]["tools"].as_array().expect("tools array");
+        assert!(tools.iter().any(|tool| tool["name"] == "polish"));
+    }
+
+    #[test]
+    fn polish_args_map_input_out_palette_and_seed() {
+        let args = tool_command_args(
+            "polish",
+            &json!({
+                "input": "/tmp/shot.png",
+                "out": "/tmp/card.png",
+                "palette": "violet-haze",
+                "styleSeed": 12
+            }),
+        )
+        .expect("args");
+        assert_eq!(args[0], "polish");
+        assert!(args.contains(&"/tmp/shot.png".to_string()));
+        assert!(args.windows(2).any(|w| w == ["--out", "/tmp/card.png"]));
+        assert!(args.windows(2).any(|w| w == ["--palette", "violet-haze"]));
+        assert!(args.windows(2).any(|w| w == ["--style-seed", "12"]));
+    }
+
+    #[test]
+    fn polish_args_require_input() {
+        let error = tool_command_args("polish", &json!({})).expect_err("missing input");
+        assert!(error.contains("input"));
     }
 }

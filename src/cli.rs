@@ -32,6 +32,7 @@ pub struct Cli {
 #[derive(Debug, Subcommand)]
 pub enum Command {
     Capture(CaptureArgs),
+    Polish(PolishArgs),
     Doctor(DoctorArgs),
     ListWindows(ListWindowsArgs),
     Gallery(GalleryArgs),
@@ -41,6 +42,30 @@ pub enum Command {
     Schema(SchemaArgs),
     CodexPayload(crate::codex::CodexPayloadArgs),
     Mcp(crate::mcp::McpArgs),
+}
+
+/// Style an existing image into a Cloche presentation card: rounded window,
+/// layered shadows, and a vibrant gradient backdrop.
+#[derive(Debug, Args)]
+pub struct PolishArgs {
+    /// Image to style (PNG, JPEG, or WebP).
+    #[arg(value_name = "INPUT")]
+    pub input: PathBuf,
+    /// Output card path; defaults to `<input>-card.png` next to the input.
+    #[arg(long)]
+    pub out: Option<PathBuf>,
+    /// Gradient palette; random when omitted.
+    #[arg(long, value_parser = palette_name_parser())]
+    pub palette: Option<String>,
+    /// Seed for deterministic styling.
+    #[arg(long)]
+    pub style_seed: Option<u64>,
+    #[arg(long, default_value = "json")]
+    pub format: OutputFormat,
+}
+
+fn palette_name_parser() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(polish::palette_names())
 }
 
 #[derive(Debug, Args)]
@@ -239,6 +264,89 @@ pub fn capture(args: CaptureArgs) -> Result<ExitCode, Box<dyn std::error::Error>
     } else {
         ExitCode::from(1)
     })
+}
+
+pub fn polish(args: PolishArgs) -> Result<ExitCode, Box<dyn std::error::Error>> {
+    let result = run_polish(args);
+    print_json(&result)?;
+    Ok(if result.ok {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::from(1)
+    })
+}
+
+fn run_polish(args: PolishArgs) -> crate::contract::PolishResult {
+    let mut warnings = Vec::new();
+    let mut errors = Vec::new();
+    let mut input_info = None;
+    let mut card_info = None;
+    let mut style_info = None;
+
+    let card_path = args
+        .out
+        .clone()
+        .unwrap_or_else(|| default_card_path(&args.input));
+    if card_path.extension().and_then(|ext| ext.to_str()) != Some("png") {
+        errors.push(format!(
+            "output path {} must end in .png; cards are always PNG",
+            card_path.display()
+        ));
+    } else {
+        let seed = args.style_seed.unwrap_or_else(polish::random_seed);
+        // The palette value is pre-validated by clap, so a miss here is a bug.
+        let style = match args.palette.as_deref() {
+            Some(name) => polish::style_with_palette(seed, name)
+                .ok_or_else(|| format!("unknown palette: {name}")),
+            None => Ok(polish::style_from_seed(seed)),
+        };
+        match style {
+            Ok(style) => {
+                let parent_ready = card_path
+                    .parent()
+                    .filter(|parent| !parent.as_os_str().is_empty())
+                    .map_or(Ok(()), util::create_dir_all);
+                match parent_ready.map_err(|err| err.to_string()).and_then(|()| {
+                    polish::render_codex_card(&args.input, &card_path, None, &style)
+                        .map_err(|err| err.to_string())
+                }) {
+                    Ok(()) => {
+                        style_info = Some(style.info());
+                        match image_info(&args.input, ImageDetail::Original) {
+                            Ok(info) => input_info = Some(info),
+                            Err(err) => warnings.push(err.to_string()),
+                        }
+                        match image_info(&card_path, ImageDetail::Original) {
+                            Ok(info) => card_info = Some(info),
+                            Err(err) => errors.push(err.to_string()),
+                        }
+                    }
+                    Err(err) => errors.push(err),
+                }
+            }
+            Err(err) => errors.push(err),
+        }
+    }
+
+    crate::contract::PolishResult {
+        ok: card_info.is_some() && errors.is_empty(),
+        version: VERSION.to_string(),
+        created_at: Utc::now(),
+        input: input_info,
+        card: card_info,
+        presentation_style: style_info,
+        warnings,
+        errors,
+    }
+}
+
+/// Sibling path with a `-card.png` suffix: `shot.png` -> `shot-card.png`.
+fn default_card_path(input: &Path) -> PathBuf {
+    let stem = input
+        .file_stem()
+        .and_then(|stem| stem.to_str())
+        .unwrap_or("shot");
+    input.with_file_name(format!("{stem}-card.png"))
 }
 
 pub fn doctor(_args: DoctorArgs) -> Result<ExitCode, Box<dyn std::error::Error>> {
@@ -478,4 +586,120 @@ fn image_info(path: &std::path::Path, detail: ImageDetail) -> Result<ImageInfo, 
 fn print_json<T: serde::Serialize>(value: &T) -> Result<(), serde_json::Error> {
     println!("{}", serde_json::to_string_pretty(value)?);
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(label: &str) -> PathBuf {
+        let dir =
+            std::env::temp_dir().join(format!("cloche-polish-test-{}-{label}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(&dir).expect("create temp dir");
+        dir
+    }
+
+    fn write_test_image(path: &Path, width: u32, height: u32) {
+        let image = image::RgbaImage::from_pixel(width, height, image::Rgba([180, 180, 180, 255]));
+        image.save(path).expect("write test image");
+    }
+
+    #[test]
+    fn default_card_path_appends_card_suffix() {
+        assert_eq!(
+            default_card_path(Path::new("/tmp/example/shot.png")),
+            PathBuf::from("/tmp/example/shot-card.png")
+        );
+        assert_eq!(
+            default_card_path(Path::new("diff.jpg")),
+            PathBuf::from("diff-card.png")
+        );
+        assert_eq!(
+            default_card_path(Path::new("/tmp/noext")),
+            PathBuf::from("/tmp/noext-card.png")
+        );
+    }
+
+    #[test]
+    fn polish_writes_card_next_to_input() {
+        let dir = temp_dir("default-out");
+        let input = dir.join("shot.png");
+        write_test_image(&input, 320, 240);
+        let result = run_polish(PolishArgs {
+            input: input.clone(),
+            out: None,
+            palette: None,
+            style_seed: Some(7),
+            format: OutputFormat::Json,
+        });
+        assert!(result.ok, "errors: {:?}", result.errors);
+        let card = result.card.expect("card info");
+        assert_eq!(
+            card.path,
+            util::canonical_or_original(&dir.join("shot-card.png"))
+        );
+        assert!(card.path.exists());
+        // The card adds padding around the input pixels.
+        assert!(card.width.expect("width") > 320);
+        assert!(card.height.expect("height") > 240);
+        let style = result.presentation_style.expect("style info");
+        assert_eq!(style.seed, 7);
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn polish_honors_palette_and_out_path() {
+        let dir = temp_dir("palette-out");
+        let input = dir.join("input.png");
+        write_test_image(&input, 200, 160);
+        let out = dir.join("nested").join("styled.png");
+        let result = run_polish(PolishArgs {
+            input,
+            out: Some(out.clone()),
+            palette: Some("aurora-teal".to_string()),
+            style_seed: Some(11),
+            format: OutputFormat::Json,
+        });
+        assert!(result.ok, "errors: {:?}", result.errors);
+        assert_eq!(
+            result.presentation_style.expect("style").palette,
+            "aurora-teal"
+        );
+        assert!(out.exists());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn polish_rejects_non_png_output() {
+        let dir = temp_dir("bad-out");
+        let input = dir.join("input.png");
+        write_test_image(&input, 64, 64);
+        let result = run_polish(PolishArgs {
+            input,
+            out: Some(dir.join("card.jpg")),
+            palette: None,
+            style_seed: Some(3),
+            format: OutputFormat::Json,
+        });
+        assert!(!result.ok);
+        assert!(result.errors.iter().any(|err| err.contains(".png")));
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn polish_reports_missing_input() {
+        let dir = temp_dir("missing-input");
+        let result = run_polish(PolishArgs {
+            input: dir.join("does-not-exist.png"),
+            out: None,
+            palette: None,
+            style_seed: Some(5),
+            format: OutputFormat::Json,
+        });
+        assert!(!result.ok);
+        assert!(!result.errors.is_empty());
+        assert!(result.card.is_none());
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

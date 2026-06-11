@@ -54,6 +54,20 @@ pub struct AppshotResult {
     pub errors: Vec<String>,
 }
 
+/// Result of styling an existing image into a presentation card.
+#[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct PolishResult {
+    pub ok: bool,
+    pub version: String,
+    pub created_at: DateTime<Utc>,
+    pub input: Option<ImageInfo>,
+    pub card: Option<ImageInfo>,
+    pub presentation_style: Option<PresentationStyleInfo>,
+    pub warnings: Vec<String>,
+    pub errors: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct BackendInfo {
