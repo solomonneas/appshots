@@ -2,6 +2,7 @@
 name = "cloche"
 version = "0.1.0"
 edition = "2024"
+default-run = "cloche"
 description = "Open-source desktop capture CLI for screenshots, short reels, and agents"
 license = "Apache-2.0"
 repository = "https://github.com/escoffier-labs/cloche"
