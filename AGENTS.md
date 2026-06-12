@@ -40,3 +40,5 @@ It runs `cargo fmt --check`, `cargo clippy --all-targets -- -D warnings`, and `c
 
 ## Memory Handoff
 At the end of any substantial task, write a handoff note to `.claude/memory-handoffs/` using that directory's `TEMPLATE.md`. Record durable discoveries, gotchas, and decisions. Do not wait to be reminded.
+
+Note: `.claude/` is deliberately gitignored, so the handoff directory and its template exist only on the maintainer's machines and are absent from fresh clones. If you are working from a clone without it, skip the handoff; it is a maintainer-local memory flow, not a contributor requirement.
