@@ -19,7 +19,7 @@ USAGE
 }
 
 target=""
-artifact_url="https://github.com/escoffier-labs/cloche/releases/download/v0.1.0/cloche-0.1.0-x86_64-unknown-linux-gnu.tar.gz"
+artifact_url="https://github.com/escoffier-labs/cloche/releases/download/v0.2.0/cloche-0.2.0-x86_64-unknown-linux-gnu.tar.gz"
 ssh_options=()
 
 while [[ $# -gt 0 ]]; do
