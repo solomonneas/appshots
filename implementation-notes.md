@@ -61,3 +61,17 @@ Running log of decisions and tradeoffs not captured in commit messages or the sp
   stays true.
 - Result contract is a new `PolishResult` (camelCase wire keys) rather than
   reusing `AppshotResult`, which is capture-shaped (target, backend, window).
+
+## Dependency feature trim (2026-06-12)
+
+- All deps now declare `default-features = false` with explicit feature lists,
+  per the AGENTS.md rule. Net effect: clap drops `color`/`suggestions`
+  (anstream, colorchoice, strsim gone from the tree; anstyle remains because
+  clap_builder depends on it unconditionally). Help and error output verified
+  readable without them.
+- `image` gained `jpeg` and `webp` decode features: `polish` documents JPEG and
+  WebP inputs, and png-only silently broke that contract (caught by a failing
+  test before the fix). Encode surface is still PNG-only by design.
+- `rand` features: `std`, `std_rng`, `thread_rng`, `os_rng` are exactly what
+  `rand::rng()` + `StdRng::seed_from_u64` need. `schemars` keeps `derive` and
+  `chrono` (DateTime fields in the contract derive JsonSchema).
